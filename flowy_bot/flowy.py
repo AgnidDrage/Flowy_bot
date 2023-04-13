@@ -37,6 +37,7 @@ async def processRequest(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_message(chat_id=update.effective_chat.id, text="Uploading...")
     video_file = await context.bot.get_file(video.file_id)
     name_file = f"{chat_id}_{video.file_unique_id}.{video.mime_type.split('/')[1]}"
+    os.makedirs("./videos", exist_ok=True)
     video_path = "./videos/"+name_file
 
     # Download the video
