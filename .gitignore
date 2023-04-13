@@ -129,5 +129,6 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-#video test folder
+#videos folders
 videos/
+videos_for_processing/
