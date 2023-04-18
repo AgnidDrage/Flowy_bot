@@ -4,6 +4,7 @@ import socket
 import argparse
 import time
 import pickle
+import cv2
 from dotenv import load_dotenv
 from telegram import Update, Sticker
 from telegram.ext import filters, ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler
