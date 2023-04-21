@@ -1,6 +1,5 @@
 import argparse
 import socketserver
-import threading
 import pickle
 import os
 import cv2
@@ -8,8 +7,11 @@ import numpy as np
 from dotenv import load_dotenv
 from celery import Celery
 from concurrent.futures import ThreadPoolExecutor
+import threading
+import matplotlib.pyplot as plt
 
 load_dotenv()
+TOKEN = os.getenv('TOKEN')
 BROKER_URL = os.getenv('BROKER_URL')
 CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND')
 celery_app = Celery('flowy_backend', broker=BROKER_URL, backend=CELERY_RESULT_BACKEND)
@@ -33,7 +35,7 @@ def process_video(video_pickle):
     # Prepare video for process converting it to a np.array
     cap = cv2.VideoCapture(video_name) # Open video file
     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) # Read number of frames
-    framerate = int(cap.get(cv2.CAP_PROP_FPS)) # Read framerate
+    original_framerate = int(cap.get(cv2.CAP_PROP_FPS)) # Read framerate
     print(frame_count)
     frames = [] # List to store frames
 
@@ -46,19 +48,6 @@ def process_video(video_pickle):
     video = np.stack(frames, axis=0) # convert the frame list into a ndarray with shape = (frame, x, y, channel)
     print(video.shape)
     os.remove(video_name)
-
-    # Process the video
-
-    # target_framerate = video.shape[0] * 2
-    # new_axis = np.linspace(0, video.shape[0]-1, target_framerate)
-
-    # # Interpolate the frame axis
-    # for i in range(video.shape[1]):
-    #     for j in range(video.shape[2]):
-    #         for k in range(video.shape[3]):
-    #             video[:, i, j, k] = np.interp(new_axis, np.arange(video.shape[0]), video[:, i, j, k])
-
-    # return video.shape
     
     # Divide the video in 3 chunks
     chunks = np.array_split(video, 3, axis=0)
@@ -68,33 +57,43 @@ def process_video(video_pickle):
     with ThreadPoolExecutor(max_workers=3) as executor:
         results = executor.map(process_chunk, chunks)
     
+
     print("Rebuilding video")
     final_video = np.concatenate(list(results), axis=0)
+    print(final_video.shape)
+    print(final_video.min(), final_video.max()) 
 
-    # Normalize the video
-    final_video = (final_video / 255).astype(np.uint8)
+    # Save the new video
+    new_frame_rate = original_framerate * 2
 
-    # Save the video
-    print("Saving video")
-    out = cv2.VideoWriter(video_name, cv2.VideoWriter_fourcc(*'mp4v'), framerate*2, (final_video.shape[2], final_video.shape[1]))
+    fourcc =  cv2.VideoWriter_fourcc(*'mp4v')
+    output_video = cv2.VideoWriter('output.mp4', fourcc, new_frame_rate, (video.shape[2], video.shape[1]), isColor=True)
 
-    for i in range(final_video.shape[0]):
-        out.write(final_video[i])
+    for frame in final_video:
+        output_video.write(frame)
 
-    out.release()
+    output_video.release()
 
 
 
 def process_chunk(chunk):
-    target_frames = chunk.shape[0] * 2
-    new_frame_axis = np.linspace(0, chunk.shape[0]-1, target_frames)
-    new_chunk = np.empty((target_frames, chunk.shape[1], chunk.shape[2], chunk.shape[3]))
+    frames, x, y, channel = chunk.shape
+    alpha = 0.5
 
-    # Interpolate the frame axis
-    for i in range(chunk.shape[1]):
-        for j in range(chunk.shape[2]):
-            for k in range(chunk.shape[3]):
-                new_chunk[:, i, j, k] = np.interp(new_frame_axis, np.arange(chunk.shape[0]), chunk[:, i, j, k])
+    # Create a new array for save the new chunk
+    new_chunk = np.zeros((frames*2-1, x, y, channel), dtype=chunk.dtype)
+
+    # Copy the original frames
+    new_chunk[::2] = chunk
+
+    # Interpolate the frames and normalize new frame
+    for i in range(frames-1):
+        new_frame = (1 - alpha) * chunk[i] + alpha * chunk[i+1]
+        new_chunk[i*2+1] = new_frame
+
+    # Interpolate the last frame
+    new_chunk[-1] = chunk[-1]
+    
     return new_chunk
 
 class FlowyBackend(socketserver.ThreadingMixIn, socketserver.BaseRequestHandler):
