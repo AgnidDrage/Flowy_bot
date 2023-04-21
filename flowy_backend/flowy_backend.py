@@ -88,10 +88,8 @@ def process_video(video_pickle):
     response = requests.post(url, files=files, data=data)
     print(response)
 
-    # # Send the video using the file ID
-    # url = f"https://api.telegram.org/bot{TOKEN}/sendVideo"
-    # data = {"chat_id": chat_id, "video": file_id}
-    # response = requests.post(url, data=data)
+    # Delete video
+    os.remove(processed_path)
 
 def process_chunk(chunk):
     for i in range(2):
