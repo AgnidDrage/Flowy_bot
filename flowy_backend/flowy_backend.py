@@ -9,6 +9,7 @@ from celery import Celery
 from concurrent.futures import ThreadPoolExecutor
 import threading
 import matplotlib.pyplot as plt
+import requests
 
 load_dotenv()
 TOKEN = os.getenv('TOKEN')
@@ -31,6 +32,8 @@ def process_video(video_pickle):
     with open(video_name, 'wb') as f:
         f.write(video_bytes)
     del video_pickle, video_bytes
+
+    chat_id = video_name.split('_')[0]
 
     # Prepare video for process converting it to a np.array
     cap = cv2.VideoCapture(video_name) # Open video file
@@ -64,7 +67,7 @@ def process_video(video_pickle):
     print(final_video.min(), final_video.max()) 
 
     # Save the new video
-    new_frame_rate = original_framerate * 2
+    new_frame_rate = 60 * 2
 
     fourcc =  cv2.VideoWriter_fourcc(*'mp4v')
     os.makedirs('./processed_videos', exist_ok=True)
@@ -75,27 +78,44 @@ def process_video(video_pickle):
 
     output_video.release()
 
+    processed_path = './processed_videos/'+video_name
 
+    #Send video
+    print("Sending video")
+    url = f"https://api.telegram.org/bot{TOKEN}/sendVideo"
+    files = {"video": open(processed_path, "rb")}
+    data = {"chat_id": chat_id}
+    response = requests.post(url, files=files, data=data)
+    print(response)
+
+    # # Send the video using the file ID
+    # url = f"https://api.telegram.org/bot{TOKEN}/sendVideo"
+    # data = {"chat_id": chat_id, "video": file_id}
+    # response = requests.post(url, data=data)
 
 def process_chunk(chunk):
-    frames, x, y, channel = chunk.shape
-    alpha = 0.5
+    for i in range(2):
+        frames, x, y, channel = chunk.shape
+        alpha = 0.5
 
-    # Create a new array for save the new chunk
-    new_chunk = np.zeros((frames*2-1, x, y, channel), dtype=chunk.dtype)
+        # Create a new array for save the new chunk
+        new_chunk = np.zeros((frames*2-1, x, y, channel), dtype=chunk.dtype)
 
-    # Copy the original frames
-    new_chunk[::2] = chunk
+        # Copy the original frames
+        new_chunk[::2] = chunk
 
-    # Interpolate the frames and normalize new frame
-    for i in range(frames-1):
-        new_frame = (1 - alpha) * chunk[i] + alpha * chunk[i+1]
-        new_chunk[i*2+1] = new_frame
+        # Interpolate the frames and normalize new frame
+        for i in range(frames-1):
+            new_frame = (1 - alpha) * chunk[i] + alpha * chunk[i+1]
+            new_chunk[i*2+1] = new_frame
 
-    # Interpolate the last frame
-    new_chunk[-1] = chunk[-1]
+        # Interpolate the last frame
+        new_chunk[-1] = chunk[-1]
+
+        chunk = new_chunk
     
-    return new_chunk
+
+    return chunk
 
 class FlowyBackend(socketserver.ThreadingMixIn, socketserver.BaseRequestHandler):
     def handle(self):
@@ -123,7 +143,7 @@ class FlowyBackend(socketserver.ThreadingMixIn, socketserver.BaseRequestHandler)
         print("Enviando video a Celery...")
         result = process_video.delay(video_pickle)
         result = result.get()
-        print(result)
+        
 
 
 if __name__ == '__main__':
