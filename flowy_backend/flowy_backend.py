@@ -67,7 +67,8 @@ def process_video(video_pickle):
     new_frame_rate = original_framerate * 2
 
     fourcc =  cv2.VideoWriter_fourcc(*'mp4v')
-    output_video = cv2.VideoWriter('output.mp4', fourcc, new_frame_rate, (video.shape[2], video.shape[1]), isColor=True)
+    os.makedirs('./processed_videos', exist_ok=True)
+    output_video = cv2.VideoWriter('./processed_videos/'+video_name, fourcc, new_frame_rate, (video.shape[2], video.shape[1]), isColor=True)
 
     for frame in final_video:
         output_video.write(frame)
