@@ -4,11 +4,11 @@ import pickle
 import os
 import cv2
 import numpy as np
+import socket
 from dotenv import load_dotenv
 from celery import Celery
 from concurrent.futures import ThreadPoolExecutor
 import threading
-import matplotlib.pyplot as plt
 import requests
 
 load_dotenv()
@@ -115,7 +115,7 @@ def process_chunk(chunk):
 
     return chunk
 
-class FlowyBackend(socketserver.ThreadingMixIn, socketserver.BaseRequestHandler):
+class FlowyHandler(socketserver.ThreadingMixIn, socketserver.BaseRequestHandler):
     def handle(self):
         # Recive and save the video in a temporal file
         BUFFER_SIZE = 1024 * 1024  # Cambiar por el tamaño del fragmento de datos a recibir
@@ -144,6 +144,26 @@ class FlowyBackend(socketserver.ThreadingMixIn, socketserver.BaseRequestHandler)
         
 
 
+class FlowyBackend(socketserver.TCPServer):
+    
+    #address_family = socket.AF_UNSPEC  # allow both IPv4 and IPv6
+
+    def server_bind(self):
+        try:
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            self.socket.bind(self.server_address)
+            self.server_address = self.socket.getsockname()
+        except:
+            self.address_family = socket.AF_INET6
+            self.socket = socket.socket(self.address_family,
+                                        self.socket_type)
+            self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            self.socket.bind(self.server_address)
+            self.server_address = self.socket.getsockname()
+            
+             
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='Flowy backend')
     parser.add_argument(
@@ -154,6 +174,7 @@ if __name__ == '__main__':
 
     HOST, PORT = args.ip, args.port
 
-    with socketserver.TCPServer((HOST, PORT), FlowyBackend) as server:
+    with FlowyBackend((HOST, PORT), FlowyHandler) as server:
+        server.socket_type = socket.AF_INET6
         print('Server running in', HOST, 'port', PORT)
         server.serve_forever()
