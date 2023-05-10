@@ -61,8 +61,6 @@ def send_video(video_path, name_file):
         video_data = f.read()
         video_pickle = pickle.dumps((name_file, video_data))
         f.close()
-
-
     # Send the video to the backend
     try:
         s = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)

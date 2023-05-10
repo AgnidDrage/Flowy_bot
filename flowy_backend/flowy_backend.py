@@ -5,6 +5,7 @@ import os
 import cv2
 import numpy as np
 import socket
+from moviepy.editor import *
 from dotenv import load_dotenv
 from celery import Celery
 from concurrent.futures import ThreadPoolExecutor
@@ -35,7 +36,9 @@ def process_video(video_pickle):
     chat_id = video_name.split('_')[0]
 
     # Prepare video for process converting it to a np.array
-    chunks, video_shape = prepare_video('./temp/'+video_name)
+    chunks, video_shape, audio = prepare_video('./temp/'+video_name)
+
+    os.remove('./temp/'+video_name)
 
     # Process each chunk in a different process
     print("Generating threads")
@@ -44,7 +47,7 @@ def process_video(video_pickle):
     
 
     print("Rebuilding video")
-    processed_path = rebuild_video(results, video_name, video_shape)
+    processed_path = rebuild_video(results, video_name, video_shape, audio)
 
     #Send video
     response = send_video(processed_path, chat_id)
@@ -65,12 +68,13 @@ def prepare_video(video_temp_path):
             frames.append(img) # it is added to the list
 
     video = np.stack(frames, axis=0) # convert the frame list into a ndarray with shape = (frame, x, y, channel)
-    os.remove(video_temp_path)
     
     # Divide the video in 3 chunks
     chunks = np.array_split(video, 3, axis=0)
 
-    return chunks, video.shape
+    audio = VideoFileClip(video_temp_path).audio
+
+    return chunks, video.shape, audio
 
 def process_chunk(chunk):
     for i in range(2):
@@ -95,7 +99,7 @@ def process_chunk(chunk):
 
     return chunk
 
-def rebuild_video(chunks, video_name, shape):
+def rebuild_video(chunks, video_name, shape, audio):
     final_video = np.concatenate(list(chunks), axis=0)
 
     # Save the new video
@@ -110,7 +114,16 @@ def rebuild_video(chunks, video_name, shape):
 
     output_video.release()
 
-    return './processed_videos/'+video_name
+    processed_path =  './processed_videos/'+video_name
+
+    # Add audio
+    video = VideoFileClip(processed_path)
+    audio = audio.set_duration(video.duration)
+    video = video.set_audio(audio)
+    os.remove(processed_path)
+    video.write_videofile(processed_path)
+
+    return processed_path
 
 def send_video(video_path, chat_id):
     print("Sending video")
