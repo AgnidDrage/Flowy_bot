@@ -1,4 +1,5 @@
 import argparse
+import logging
 import socketserver
 import pickle
 import os
@@ -17,15 +18,20 @@ TOKEN = os.getenv('TOKEN')
 BROKER_URL = os.getenv('BROKER_URL')
 CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND')
 FRAMES_MULTIPLIER = int(os.getenv('FRAMES_MULTIPLIER'))
-celery_app = Celery('flowy_backend', broker=BROKER_URL, backend=CELERY_RESULT_BACKEND)
+celery_app = Celery('flowy_backend', broker=BROKER_URL,
+                    backend=CELERY_RESULT_BACKEND)
 celery_app.conf.update(
     task_serializer='pickle',
-    accept_content=['json','pickle'],
+    accept_content=['json', 'pickle'],
     broker_hearbeat=10,
 )
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+    
 
-
-#@celery_app.task
+@celery_app.task
 def process_video(video_pickle):
     print("Video Received")
     # Read pickle and save video name and the video itself in a temporal file.
@@ -33,52 +39,69 @@ def process_video(video_pickle):
     os.makedirs('./temp', exist_ok=True)
     with open('./temp/'+video_name, 'wb') as f:
         f.write(video_bytes)
+
     del video_pickle, video_bytes
 
     chat_id = video_name.split('_')[0]
 
-    # Prepare video for process converting it to a np.array
-    chunks, video_shape, audio, original_framerate, duration = prepare_video('./temp/'+video_name)
+    try:
 
-    os.remove('./temp/'+video_name)
+        # Prepare video for process converting it to a np.array
+        chunks, video_shape, audio, original_framerate, duration = prepare_video(
+            './temp/'+video_name)
 
-    # Process each chunk in a different process
-    print("Generating threads")
-    with ThreadPoolExecutor(max_workers=3) as executor:
-        results = executor.map(process_chunk, chunks)
-    
+        os.remove('./temp/'+video_name)
 
-    print("Rebuilding video")
-    processed_path, temp_path = rebuild_video(results, video_name, video_shape, audio, original_framerate, duration)
+        # Process each chunk in a different process
+        print("Generating threads")
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            results = executor.map(process_chunk, chunks)
 
-    #Send video
-    response = send_video(processed_path, chat_id)
-    print(response)
-    os.remove(processed_path)
-    os.remove(temp_path)
+        print("Rebuilding video")
+        processed_path, temp_path = rebuild_video(
+            results, video_name, video_shape, audio, original_framerate, duration)
+
+        # Send video
+        response = send_video(processed_path, chat_id)
+        print(response)
+        os.remove(processed_path)
+        os.remove(temp_path)
+
+    except:
+        print("FATAL ERROR")
+        if os.path.exists('./temp/'+video_name):
+            os.remove('./temp/'+video_name)
+        if os.path.exists('./processed_videos/'+video_name):
+            os.remove('./processed_videos/'+video_name)
+        for file in os.listdir('.'):
+            if file.endswith('.mp3'):
+                os.remove(file)
+        handle_error(chat_id)
 
 
 def prepare_video(video_temp_path):
-    cap = cv2.VideoCapture(video_temp_path) # Open video file
-    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) # Read number of frames
-    original_framerate = int(cap.get(cv2.CAP_PROP_FPS)) # Read framerate
-    duration = frame_count / original_framerate # Calculate duration
-    frames = [] # List to store frames
+    cap = cv2.VideoCapture(video_temp_path)  # Open video file
+    frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)
+                    )  # Read number of frames
+    original_framerate = int(cap.get(cv2.CAP_PROP_FPS))  # Read framerate
+    duration = frame_count / original_framerate  # Calculate duration
+    frames = []  # List to store frames
 
-    ret = True # Boolean flag 
-    while ret: # while there are frames to read
-        ret, img = cap.read() # read frame
-        if ret: # if the frame was read correctly
-            frames.append(img) # it is added to the list
+    ret = True  # Boolean flag
+    while ret:  # while there are frames to read
+        ret, img = cap.read()  # read frame
+        if ret:  # if the frame was read correctly
+            frames.append(img)  # it is added to the list
 
-    video = np.stack(frames, axis=0) # convert the frame list into a ndarray with shape = (frame, x, y, channel)
-    
+    # convert the frame list into a ndarray with shape = (frame, x, y, channel)
+    video = np.stack(frames, axis=0)
+
     # Divide the video in 3 chunks
-    chunks = np.array_split(video, 3, axis=0)
-
+    chunks = np.array_split(video, 4, axis=0)
     audio = VideoFileClip(video_temp_path).audio
 
     return chunks, video.shape, audio, original_framerate, duration
+    
 
 def process_chunk(chunk):
     for i in range(FRAMES_MULTIPLIER):
@@ -103,19 +126,21 @@ def process_chunk(chunk):
 
     return chunk
 
+
 def rebuild_video(chunks, video_name, shape, audio, original_framerate, duration):
     os.makedirs('./processed_videos', exist_ok=True)
-    processed_path =  './processed_videos/'+video_name
+    processed_path = './processed_videos/'+video_name
     temp_path = './temp/'+video_name
 
     final_video = np.concatenate(list(chunks), axis=0)
 
     # Save the new video
     new_framerate = original_framerate * (FRAMES_MULTIPLIER+3)
-    #breakpoint()
+    # breakpoint()
 
-    fourcc =  cv2.VideoWriter_fourcc(*'mp4v')
-    output_video = cv2.VideoWriter(temp_path, fourcc, new_framerate, (shape[2], shape[1]), isColor=True)
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    output_video = cv2.VideoWriter(
+        temp_path, fourcc, new_framerate, (shape[2], shape[1]), isColor=True)
 
     for frame in final_video:
         output_video.write(frame)
@@ -123,7 +148,6 @@ def rebuild_video(chunks, video_name, shape, audio, original_framerate, duration
     output_video.release()
     # Add metadata
     add_metadata_to_video(temp_path, processed_path, new_framerate)
-    
 
     # Add audio
     video = VideoFileClip(processed_path)
@@ -135,6 +159,7 @@ def rebuild_video(chunks, video_name, shape, audio, original_framerate, duration
     video.write_videofile(processed_path)
 
     return processed_path, temp_path
+
 
 def add_metadata_to_video(temp_path, processed_path, frame_rate):
     metadata = {'frame_rate': str(frame_rate)}
@@ -148,6 +173,7 @@ def add_metadata_to_video(temp_path, processed_path, frame_rate):
 
     subprocess.run(command)
 
+
 def send_video(video_path, chat_id):
     print("Sending video")
     url = f"https://api.telegram.org/bot{TOKEN}/sendVideo"
@@ -156,39 +182,34 @@ def send_video(video_path, chat_id):
     response = requests.post(url, files=files, data=data)
     return response
 
+
+def handle_error(chat_id):
+    url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
+    data = {"chat_id": chat_id, "text": "An error ocurred, please try again later"}
+    response = requests.post(url, data=data)
+    return response
+
+
 class FlowyHandler(socketserver.ThreadingMixIn, socketserver.BaseRequestHandler):
     def handle(self):
         # Recive and save the video in a temporal file
         BUFFER_SIZE = 1024 * 1024  # Cambiar por el tamaño del fragmento de datos a recibir
         video_pickle = b''
-        print('Recibiendo video...')
+        logging.info("Recibiendo video...")
         while True:
             chunk = self.request.recv(BUFFER_SIZE)
             if not chunk:
                 break
             video_pickle += chunk
 
-        # Prepare video for Celery
-        # print("Preparando video...")
-        # video_name, video_bytes = pickle.loads(video_pickle)
-        # with open(video_name, 'wb') as f:
-        #     f.write(video_bytes)
-
-        # del video_pickle, video_bytes
-
-        # video = prepare_video(video_name)
-
-        # Send the video pickle to Celery
-        print("Enviando video a Celery...")
-        #result = process_video.delay(video_pickle)
-        #result = result.get()
-        process_video(video_pickle)
-        
+        logging.info("Video recibido, procesando...")
+        status = process_video.delay(video_pickle)
+        logging.info("Esperando nuevo video...")
 
 
 class FlowyBackend(socketserver.TCPServer):
-    
-    #address_family = socket.AF_UNSPEC  # allow both IPv4 and IPv6
+
+    # address_family = socket.AF_UNSPEC  # allow both IPv4 and IPv6
 
     def server_bind(self):
         try:
@@ -202,8 +223,6 @@ class FlowyBackend(socketserver.TCPServer):
             self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             self.socket.bind(self.server_address)
             self.server_address = self.socket.getsockname()
-
-
 
 
 if __name__ == '__main__':
