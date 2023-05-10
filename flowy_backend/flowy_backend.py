@@ -97,13 +97,33 @@ def process_chunk(chunk):
 
         chunk = new_chunk
 
+    # frames, x, y, channel = chunk.shape
+    
+    # # Create a new array for save the new chunk
+    # new_chunk = np.zeros((frames*2-1, x, y, channel), dtype=chunk.dtype)
+
+    # # Copy the original frames
+    # new_chunk[::2] = chunk
+
+    # # Interpolate the frames and normalize new frame
+    # for i in range(frames-1):
+    #     new_frame1 = (1 - 0.25) * chunk[i] + 0.25 * chunk[i+1]
+    #     new_frame2 = (1 - 0.75) * chunk[i+1] + 0.75 * chunk[i]
+    #     new_chunk[i*2+1] = new_frame1
+    #     new_chunk[i*2+2] = new_frame2
+
+    # # Interpolate the last frame
+    # new_chunk[-1] = chunk[-1]
+
+    # chunk = new_chunk
+
     return chunk
 
 def rebuild_video(chunks, video_name, shape, audio):
     final_video = np.concatenate(list(chunks), axis=0)
 
     # Save the new video
-    new_frame_rate = 60 * 2
+    new_frame_rate = 60*2+7
 
     fourcc =  cv2.VideoWriter_fourcc(*'mp4v')
     os.makedirs('./processed_videos', exist_ok=True)
