@@ -132,3 +132,4 @@ dmypy.json
 #videos folders
 videos/
 processed_videos/
+temp/

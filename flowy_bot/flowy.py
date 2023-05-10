@@ -64,8 +64,14 @@ def send_video(video_path, name_file):
 
 
     # Send the video to the backend
-    s = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-    s.connect((args.ip, args.port))
+    try:
+        s = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+        s.connect((args.ip, args.port))
+        logging.info("IPv6 connection detected")
+    except:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.connect((args.ip, args.port))
+        logging.info("IPv4 connection detected")
     for i in range(0, len(video_pickle), BUFFER_SIZE):
         s.send(video_pickle[i:i+BUFFER_SIZE])
     s.close()

@@ -16,7 +16,6 @@ TOKEN = os.getenv('TOKEN')
 BROKER_URL = os.getenv('BROKER_URL')
 CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND')
 celery_app = Celery('flowy_backend', broker=BROKER_URL, backend=CELERY_RESULT_BACKEND)
-#celery_app.conf.task_serializer = 'pickle'
 celery_app.conf.update(
     task_serializer='pickle',
     accept_content=['json','pickle'],
@@ -29,17 +28,34 @@ def process_video(video_pickle):
     print("Video Received")
     # Read pickle and save video name and the video itself in a temporal file.
     video_name, video_bytes = pickle.loads(video_pickle)
-    with open(video_name, 'wb') as f:
+    with open('./temp/'+video_name, 'wb') as f:
         f.write(video_bytes)
     del video_pickle, video_bytes
 
     chat_id = video_name.split('_')[0]
 
     # Prepare video for process converting it to a np.array
-    cap = cv2.VideoCapture(video_name) # Open video file
+    chunks, video_shape = prepare_video('./temp/'+video_name)
+
+    # Process each chunk in a different process
+    print("Generating threads")
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        results = executor.map(process_chunk, chunks)
+    
+
+    print("Rebuilding video")
+    processed_path = rebuild_video(results, video_name, video_shape)
+
+    #Send video
+    response = send_video(processed_path, chat_id)
+    print(response)
+    os.remove(processed_path)
+
+
+def prepare_video(video_temp_path):
+    cap = cv2.VideoCapture(video_temp_path) # Open video file
     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) # Read number of frames
     original_framerate = int(cap.get(cv2.CAP_PROP_FPS)) # Read framerate
-    print(frame_count)
     frames = [] # List to store frames
 
     ret = True # Boolean flag 
@@ -49,47 +65,12 @@ def process_video(video_pickle):
             frames.append(img) # it is added to the list
 
     video = np.stack(frames, axis=0) # convert the frame list into a ndarray with shape = (frame, x, y, channel)
-    print(video.shape)
-    os.remove(video_name)
+    os.remove(video_temp_path)
     
     # Divide the video in 3 chunks
     chunks = np.array_split(video, 3, axis=0)
 
-    # Process each chunk in a different process
-    print("Generating threads")
-    with ThreadPoolExecutor(max_workers=3) as executor:
-        results = executor.map(process_chunk, chunks)
-    
-
-    print("Rebuilding video")
-    final_video = np.concatenate(list(results), axis=0)
-    print(final_video.shape)
-    print(final_video.min(), final_video.max()) 
-
-    # Save the new video
-    new_frame_rate = 60 * 2
-
-    fourcc =  cv2.VideoWriter_fourcc(*'mp4v')
-    os.makedirs('./processed_videos', exist_ok=True)
-    output_video = cv2.VideoWriter('./processed_videos/'+video_name, fourcc, new_frame_rate, (video.shape[2], video.shape[1]), isColor=True)
-
-    for frame in final_video:
-        output_video.write(frame)
-
-    output_video.release()
-
-    processed_path = './processed_videos/'+video_name
-
-    #Send video
-    print("Sending video")
-    url = f"https://api.telegram.org/bot{TOKEN}/sendVideo"
-    files = {"video": open(processed_path, "rb")}
-    data = {"chat_id": chat_id}
-    response = requests.post(url, files=files, data=data)
-    print(response)
-
-    # Delete video
-    os.remove(processed_path)
+    return chunks, video.shape
 
 def process_chunk(chunk):
     for i in range(2):
@@ -111,9 +92,33 @@ def process_chunk(chunk):
         new_chunk[-1] = chunk[-1]
 
         chunk = new_chunk
-    
 
     return chunk
+
+def rebuild_video(chunks, video_name, shape):
+    final_video = np.concatenate(list(chunks), axis=0)
+
+    # Save the new video
+    new_frame_rate = 60 * 2
+
+    fourcc =  cv2.VideoWriter_fourcc(*'mp4v')
+    os.makedirs('./processed_videos', exist_ok=True)
+    output_video = cv2.VideoWriter('./processed_videos/'+video_name, fourcc, new_frame_rate, (shape[2], shape[1]), isColor=True)
+
+    for frame in final_video:
+        output_video.write(frame)
+
+    output_video.release()
+
+    return './processed_videos/'+video_name
+
+def send_video(video_path, chat_id):
+    print("Sending video")
+    url = f"https://api.telegram.org/bot{TOKEN}/sendVideo"
+    files = {"video": open(video_path, "rb")}
+    data = {"chat_id": chat_id}
+    response = requests.post(url, files=files, data=data)
+    return response
 
 class FlowyHandler(socketserver.ThreadingMixIn, socketserver.BaseRequestHandler):
     def handle(self):
@@ -160,8 +165,8 @@ class FlowyBackend(socketserver.TCPServer):
             self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             self.socket.bind(self.server_address)
             self.server_address = self.socket.getsockname()
-            
-             
+
+
 
 
 if __name__ == '__main__':
