@@ -312,8 +312,6 @@ class FlowyHandler(socketserver.ThreadingMixIn, socketserver.BaseRequestHandler)
 
 class FlowyBackend(socketserver.TCPServer):
 
-    # address_family = socket.AF_UNSPEC  # allow both IPv4 and IPv6
-
     def server_bind(self):
         try:
             self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)

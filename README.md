@@ -1,19 +1,26 @@
-Flowy es un proyecto que permite procesar videos enviados por los usuarios a través de un bot de Telegram. El procesamiento consiste en interpolar frames y aumentar el framerate de los videos usando técnicas de procesamiento de imágenes con OpenCV y NumPy. El proyecto usa sockets para comunicarse con un backend que realiza el procesamiento y devuelve el video procesado al usuario.
 
-Instalación
-Para instalar las dependencias necesarias para ejecutar el proyecto, se recomienda usar un entorno virtual de Python e instalar los paquetes usando el archivo requirements.txt:
+# Flowy Bot
 
-python -m venv venv
-source venv/bin/activate
-pip install -r requirements.txt
-También se necesita tener instalado ffmpeg en el sistema operativo para añadir metadatos y audio a los videos procesados.
 
-Uso
-Para usar el proyecto, se deben seguir los siguientes pasos:
+Flowy is a project that allows processing videos sent by users through a Telegram bot. The processing consists of interpolating frames and increasing the framerate of the videos using image processing techniques with OpenCV and NumPy. The project uses sockets to communicate with a backend that performs the processing and returns the processed video to the user.
 
-Crear un bot de Telegram usando BotFather y obtener el token de acceso.
-Establecer el token de acceso como una variable de entorno llamada TOKEN.
-Ejecutar el script flowy.py para iniciar el bot de Telegram.
-Ejecutar el script flowy_backend.py para iniciar el servidor que procesa los videos.
-Iniciar en el backend Celery para que procese los videos.
-Enviar un video al bot de Telegram desde la aplicación y esperar a recibir el video procesado.
+
+
+
+## Installation
+
+To install the necessary dependencies to run the project, it is recommended to use a Python virtual environment and install the packages using the requirements.txt file:
+
+python -m venv venv source venv/bin/activate pip install -r requirements.txt You also need to have ffmpeg installed on the operating system to add metadata and audio to the processed videos.
+    
+## Usage
+
+To use the project, you must follow these steps:
+
+Create a Telegram bot using BotFather and get the access token. Set the access token as an environment variable called TOKEN. Run the flowy.py script to start the Telegram bot. Run the flowy_backend.py script to start the server that processes the videos. Start Celery on the backend to process the videos. Send a video to the Telegram bot from the application and wait to receive the processed video.
+
+
+## Author
+
+- [@AgnidDrage](https://github.com/AgnidDrage)
+
