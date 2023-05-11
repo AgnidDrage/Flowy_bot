@@ -23,6 +23,18 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def processRequest(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+        Processes a video request from a user using the Telegram API.
+
+        Gets the video from the update object and checks if its size is less than 20 MB.
+        Sends a message to the user and downloads the video to a local path using the context object.
+        Sends the video to the backend using the send_video function.
+
+        :param update: The update object that contains the user message and the video.
+        :type update: Update
+        :param context: The context object that provides access to the bot and its methods.
+        :type context: ContextTypes.DEFAULT_TYPE
+    """
     # Get video
     chat_id = update.effective_chat.id
     video = update.message.video
@@ -54,6 +66,21 @@ async def processRequest(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 def send_video(video_path, name_file):
+    """
+        Sends a video file to the backend using a socket connection.
+
+        Creates a pickle with the name of the video and the video data by reading the file from the given path.
+        Tries to create a socket object with IPv6 protocol and connects to the backend server using the given ip and port arguments.
+        If the IPv6 connection fails, creates a socket object with IPv4 protocol and connects to the backend server.
+        Sends the pickle data in chunks of BUFFER_SIZE bytes using the socket object.
+        Closes the socket object and deletes the video file from the local path.
+
+        :param video_path: The path of the video file to send.
+        :type video_path: str
+        :param name_file: The name of the video file.
+        :type name_file: str
+    """
+
     # Create pickle with the name of the video and the video itself
     with open(video_path, 'rb') as f:
         video_data = f.read()
