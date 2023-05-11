@@ -1,4 +1,4 @@
-Video Processor\n\n
+Video Processor
 Video Processor es un proyecto que permite procesar videos enviados por los usuarios a través de un bot de Telegram. El procesamiento consiste en interpolar frames y aumentar el framerate de los videos usando técnicas de procesamiento de imágenes con OpenCV y NumPy. El proyecto usa sockets para comunicarse con un backend que realiza el procesamiento y devuelve el video procesado al usuario.
 
 Instalación
@@ -14,6 +14,7 @@ Para usar el proyecto, se deben seguir los siguientes pasos:
 
 Crear un bot de Telegram usando BotFather y obtener el token de acceso.
 Establecer el token de acceso como una variable de entorno llamada TOKEN.
-Ejecutar el script bot.py para iniciar el bot de Telegram.
-Ejecutar el script backend.py para iniciar el servidor que procesa los videos.
+Ejecutar el script flowy.py para iniciar el bot de Telegram.
+Ejecutar el script flowy_backend.py para iniciar el servidor que procesa los videos.
+Iniciar en el backend Celery para que procese los videos.
 Enviar un video al bot de Telegram desde la aplicación y esperar a recibir el video procesado.
