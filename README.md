@@ -1,5 +1,4 @@
-Video Processor
-Video Processor es un proyecto que permite procesar videos enviados por los usuarios a través de un bot de Telegram. El procesamiento consiste en interpolar frames y aumentar el framerate de los videos usando técnicas de procesamiento de imágenes con OpenCV y NumPy. El proyecto usa sockets para comunicarse con un backend que realiza el procesamiento y devuelve el video procesado al usuario.
+Flowy es un proyecto que permite procesar videos enviados por los usuarios a través de un bot de Telegram. El procesamiento consiste en interpolar frames y aumentar el framerate de los videos usando técnicas de procesamiento de imágenes con OpenCV y NumPy. El proyecto usa sockets para comunicarse con un backend que realiza el procesamiento y devuelve el video procesado al usuario.
 
 Instalación
 Para instalar las dependencias necesarias para ejecutar el proyecto, se recomienda usar un entorno virtual de Python e instalar los paquetes usando el archivo requirements.txt:
