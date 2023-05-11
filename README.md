@@ -1,4 +1,4 @@
-Video Processor
+Video Processor\n\n
 Video Processor es un proyecto que permite procesar videos enviados por los usuarios a través de un bot de Telegram. El procesamiento consiste en interpolar frames y aumentar el framerate de los videos usando técnicas de procesamiento de imágenes con OpenCV y NumPy. El proyecto usa sockets para comunicarse con un backend que realiza el procesamiento y devuelve el video procesado al usuario.
 
 Instalación
@@ -7,7 +7,6 @@ Para instalar las dependencias necesarias para ejecutar el proyecto, se recomien
 python -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-Copiar
 También se necesita tener instalado ffmpeg en el sistema operativo para añadir metadatos y audio a los videos procesados.
 
 Uso
