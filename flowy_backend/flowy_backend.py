@@ -17,6 +17,7 @@ load_dotenv()
 TOKEN = os.getenv('TOKEN')
 BROKER_URL = os.getenv('BROKER_URL')
 CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND')
+BUFFER_SIZE = int(os.getenv('BUFFER_SIZE'))
 FRAMES_MULTIPLIER = int(os.getenv('FRAMES_MULTIPLIER'))
 celery_app = Celery('flowy_backend', broker=BROKER_URL,
                     backend=CELERY_RESULT_BACKEND)
@@ -32,22 +33,26 @@ logging.basicConfig(
 
 
 @celery_app.task
-def process_video(video_pickle):
+def process_video(video_pickle: bytes):
     """
-        Processes a video received as a pickle and sends it to a chat.
+        This function processes a video received as a pickle and sends it to a chat.
 
-        Reads the pickle and saves the video name and the video itself in a temporary file.
-        Prepares the video for processing by converting it to a numpy array.
-        Processes each chunk of the video in a different process using a ThreadPoolExecutor.
-        Rebuilds the processed video and saves it in another temporary file.
-        Sends the processed video to the corresponding chat using the send_video function.
-        Deletes the temporary files created.
+        It performs the following steps:
+        - Reads the pickle and saves the video name and the video itself in a temporary file.
+        - Prepares the video for processing by converting it to a numpy array.
+        - Processes each chunk of the video in a different process using a ThreadPoolExecutor.
+        - Rebuilds the processed video and saves it in another temporary file.
+        - Sends the processed video to the corresponding chat using the send_video function.
+        - Deletes the temporary files created.
 
-        :param video_pickle: The video encoded as a pickle that contains the video name and the video bytes.
-        :type video_pickle: bytes
-        :return: The response obtained when sending the processed video to the chat.
-        :rtype: str
-        :raises: Exception if any error occurs during the processing or sending of the video.
+        Args:
+            video_pickle: The video encoded as a pickle that contains the video name and the video bytes.
+
+        Returns:
+            The response obtained when sending the processed video to the chat.
+
+        Raises:
+            Exception if any error occurs during the processing or sending of the video.
     """
 
     print("Video Received")
@@ -64,7 +69,7 @@ def process_video(video_pickle):
     try:
 
         # Prepare video for process converting it to a np.array
-        chunks, video_shape, audio, original_framerate, duration = prepare_video(
+        chunks, video_shape, audio, original_framerate = prepare_video(
             './temp/'+video_name)
 
         os.remove('./temp/'+video_name)
@@ -76,7 +81,7 @@ def process_video(video_pickle):
 
         print("Rebuilding video")
         processed_path, temp_path = rebuild_video(
-            results, video_name, video_shape, audio, original_framerate, duration)
+            results, video_name, video_shape, audio, original_framerate)
 
         # Send video
         response = send_video(processed_path, chat_id)
@@ -96,26 +101,27 @@ def process_video(video_pickle):
         handle_error(chat_id)
 
 
-def prepare_video(video_temp_path):
+def prepare_video(video_temp_path: str):
     """
-        Prepares a video for processing by converting it to a numpy array and dividing it into chunks.
+        This function prepares a video for processing by converting it to a numpy array and dividing it into chunks.
 
-        Opens the video file from the temporary path and reads the number of frames, the framerate and the duration.
-        Stores each frame of the video in a list and converts the list into a numpy array with shape (frame, x, y, channel).
-        Divides the video array into 4 chunks along the frame axis using np.array_split.
-        Extracts the audio from the video file using VideoFileClip.
+        It performs the following steps:
+        - Opens the video file from the temporary path and reads the number of frames, the framerate and the duration.
+        - Stores each frame of the video in a list and converts the list into a numpy array with shape (frame, x, y, channel).
+        - Divides the video array into 4 chunks along the frame axis using np.array_split.
+        - Extracts the audio from the video file using VideoFileClip.
 
-        :param video_temp_path: The path to the temp file
-        :type video_temp_path: str
-        :return: A tuple containing the chunks, the video shape, the audio, the original framerate and the duration.
-        :rtype: tuple
-    """
+        Args:
+            video_temp_path: The path to the temp file.
+
+        Returns:
+            A tuple containing the chunks, the video shape, the audio and the original framerate.
+        """
 
     cap = cv2.VideoCapture(video_temp_path)  # Open video file
     frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)
                       )  # Read number of frames
     original_framerate = int(cap.get(cv2.CAP_PROP_FPS))  # Read framerate
-    duration = frame_count / original_framerate  # Calculate duration
     frames = []  # List to store frames
 
     ret = True  # Boolean flag
@@ -131,21 +137,22 @@ def prepare_video(video_temp_path):
     chunks = np.array_split(video, 4, axis=0)
     audio = VideoFileClip(video_temp_path).audio
 
-    return chunks, video.shape, audio, original_framerate, duration
+    return chunks, video.shape, audio, original_framerate
 
 
-def process_chunk(chunk):
+def process_chunk(chunk: np.ndarray):
     """
-        Processes a chunk of a video by interpolating frames and increasing the framerate.
+        This function processes a chunk of a video by interpolating frames and increasing the framerate.
 
-        For each iteration of the FRAMES_MULTIPLIER constant, the function doubles the number of frames in the chunk by interpolating new frames between the original ones using a linear combination with an alpha parameter. The last frame of the chunk is not interpolated.
+        It performs the following steps:
+        - For each iteration of the FRAMES_MULTIPLIER constant, the function doubles the number of frames in the chunk by interpolating new frames between the original ones using a linear combination with an alpha parameter. The last frame of the chunk is not interpolated.
 
-        :param chunk: A chunk of a video as a numpy array with shape (frame, x, y, channel).
-        :type chunk: np.ndarray
-        :return: The processed chunk with more frames and higher framerate.
-        :rtype: np.ndarray
+        Args:
+            chunk: A chunk of a video as a numpy array with shape (frame, x, y, channel).
+
+        Returns:
+            The processed chunk with more frames and higher framerate.
     """
-
     for i in range(FRAMES_MULTIPLIER):
         frames, x, y, channel = chunk.shape
         alpha = 0.5
@@ -169,28 +176,26 @@ def process_chunk(chunk):
     return chunk
 
 
-def rebuild_video(chunks, video_name, shape, audio, original_framerate):
+def rebuild_video(chunks: list, video_name: str, shape: tuple, audio: VideoFileClip, original_framerate: int):
     """
-        Rebuilds a video from processed chunks and adds metadata and audio.
+        This function rebuilds a video from processed chunks and adds metadata and audio.
 
-        Concatenates the chunks into a single numpy array representing the final video.
-        Saves the final video in a temporary file using cv2.VideoWriter with a new framerate calculated from the original framerate and the FRAMES_MULTIPLIER constant.
-        Adds metadata to the video using the add_metadata_to_video function and saves it in a processed file.
-        Adds audio to the video using VideoFileClip and sets the duration and fps to match the video.
-        Deletes the temporary file and returns the paths of the processed file and the temporary file.
+        It performs the following steps:
+        - Concatenates the chunks into a single numpy array representing the final video.
+        - Saves the final video in a temporary file using cv2.VideoWriter with a new framerate calculated from the original framerate and the FRAMES_MULTIPLIER constant.
+        - Adds metadata to the video using the add_metadata_to_video function and saves it in a processed file.
+        - Adds audio to the video using VideoFileClip and sets the duration and fps to match the video.
+        - Deletes the temporary file and returns the paths of the processed file and the temporary file.
 
-        :param chunks: A list of processed chunks of a video as numpy arrays.
-        :type chunks: list
-        :param video_name: The name of the video file.
-        :type video_name: str
-        :param shape: The shape of the original video as a tuple (frame, x, y, channel).
-        :type shape: tuple
-        :param audio: The audio of the original video as a VideoFileClip object.
-        :type audio: VideoFileClip
-        :param original_framerate: The framerate of the original video in fps.
-        :type original_framerate: int
-        :return: A tuple containing the paths of the processed file and the temporary file.
-        :rtype: tuple
+        Args:
+            chunks: A list of processed chunks of a video as numpy arrays.
+            video_name: The name of the video file.
+            shape: The shape of the original video as a tuple (frame, x, y, channel).
+            audio: The audio of the original video as a VideoFileClip object.
+            original_framerate: The framerate of the original video in fps.
+
+        Returns:
+            A tuple containing the paths of the processed file and the temporary file.
     """
     os.makedirs('./processed_videos', exist_ok=True)
     processed_path = './processed_videos/'+video_name
@@ -224,20 +229,19 @@ def rebuild_video(chunks, video_name, shape, audio, original_framerate):
     return processed_path, temp_path
 
 
-def add_metadata_to_video(temp_path, processed_path, frame_rate):
+def add_metadata_to_video(temp_path: str, processed_path: str, frame_rate: int):
     """
-        Adds metadata to a video file using ffmpeg.
+        This function adds metadata to a video file using ffmpeg.
 
-        Creates a dictionary with the metadata to add, in this case the frame rate.
-        Builds a command list with the ffmpeg executable, the input file, the metadata key-value pairs and the output file.
-        Runs the command using subprocess.run.
+        It performs the following steps:
+        - Creates a dictionary with the metadata to add, in this case the frame rate.
+        - Builds a command list with the ffmpeg executable, the input file, the metadata key-value pairs and the output file.
+        - Runs the command using subprocess.run.
 
-        :param temp_path: The path of the input video file.
-        :type temp_path: str
-        :param processed_path: The path of the output video file.
-        :type processed_path: str
-        :param frame_rate: The frame rate of the video in fps.
-        :type frame_rate: int
+        Args:
+            temp_path: The path of the input video file.
+            processed_path: The path of the output video file.
+            frame_rate: The frame rate of the video in fps.
     """
     metadata = {'frame_rate': str(frame_rate)}
 
@@ -251,20 +255,21 @@ def add_metadata_to_video(temp_path, processed_path, frame_rate):
     subprocess.run(command)
 
 
-def send_video(video_path, chat_id):
+def send_video(video_path: str, chat_id: str):
     """
-        Sends a video file to a chat using the Telegram API.
+        This function sends a video file to a chat using the Telegram API.
 
-        Opens the video file from the given path and creates a dictionary with the chat id.
-        Makes a POST request to the Telegram API endpoint with the video file and the chat id as parameters.
-        Returns the response object from the request.
+        It performs the following steps:
+        - Opens the video file from the given path and creates a dictionary with the chat id.
+        - Makes a POST request to the Telegram API endpoint with the video file and the chat id as parameters.
+        - Returns the response object from the request.
 
-        :param video_path: The path of the video file to send.
-        :type video_path: str
-        :param chat_id: The id of the chat to send the video to.
-        :type chat_id: str
-        :return: The response object from the request.
-        :rtype: requests.Response
+        Args:
+            video_path: The path of the video file to send.
+            chat_id: The id of the chat to send the video to.
+
+        Returns:
+            The response object from the request.
     """
     print("Sending video")
     url = f"https://api.telegram.org/bot{TOKEN}/sendVideo"
@@ -274,18 +279,20 @@ def send_video(video_path, chat_id):
     return response
 
 
-def handle_error(chat_id):
+def handle_error(chat_id: str):
     """
-        Sends an error message to a chat using the Telegram API.
+        This function sends an error message to a chat using the Telegram API.
 
-        Creates a dictionary with the chat id and the error text.
-        Makes a POST request to the Telegram API endpoint with the dictionary as data parameter.
-        Returns the response object from the request.
+        It performs the following steps:
+        - Creates a dictionary with the chat id and the error text.
+        - Makes a POST request to the Telegram API endpoint with the dictionary as data parameter.
+        - Returns the response object from the request.
 
-        :param chat_id: The id of the chat to send the error message to.
-        :type chat_id: str
-        :return: The response object from the request.
-        :rtype: requests.Response
+        Args:
+            chat_id: The id of the chat to send the error message to.
+
+        Returns:
+            The response object from the request.
     """
     url = f"https://api.telegram.org/bot{TOKEN}/sendMessage"
     data = {"chat_id": chat_id, "text": "An error ocurred, please try again later"}
@@ -296,7 +303,6 @@ def handle_error(chat_id):
 class FlowyHandler(socketserver.ThreadingMixIn, socketserver.BaseRequestHandler):
     def handle(self):
         # Recive and save the video in a temporal file
-        BUFFER_SIZE = 1024 * 1024  # Cambiar por el tamaño del fragmento de datos a recibir
         video_pickle = b''
         logging.info("Recibiendo video...")
         while True:

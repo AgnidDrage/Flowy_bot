@@ -17,7 +17,7 @@ python -m venv venv source venv/bin/activate pip install -r requirements.txt You
 
 To use the project, you must follow these steps:
 
-Create a Telegram bot using BotFather and get the access token. Set the access token as an environment variable called TOKEN. Run the flowy.py script to start the Telegram bot. Run the flowy_backend.py script to start the server that processes the videos. Start Celery on the backend to process the videos. Send a video to the Telegram bot from the application and wait to receive the processed video.
+Create a Telegram bot using BotFather and get the access token. Set the access token as an environment variable called TOKEN. Run the flowy.py script with --ip <IPv4 or IPv6> --port <PORT> to start the Telegram bot. Run the flowy_backend.py script with --ip <IPv4 or IPv6> --port <PORT> to start the server that processes the videos. Start Celery on the backend directory to process the videos with "celery -A flowy_backend worker". Send a video to the Telegram bot from the application and wait to receive the processed video.
 
 
 ## Author
