@@ -7,5 +7,4 @@ COPY . /flowy_backend
 RUN apt-get update
 RUN apt install -y ffmpeg
 RUN pip install -r requirements.txt
-RUN celery -A flowy_backend worker --detach
 CMD ["python", "flowy_backend.py", "--ip", "0.0.0.0", "--port", "8000"]
