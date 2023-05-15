@@ -4,7 +4,7 @@
 
 Flowy is a project that allows processing videos sent by users through a Telegram bot. The processing consists of interpolating frames and increasing the framerate of the videos using image processing techniques with OpenCV and NumPy. The project uses sockets to communicate with a backend that performs the processing and returns the processed video to the user.
 
-
+<img src='./Diagrams/SystemDiagram.jpg' alt="Diagram">
 
 
 ## Installation
