@@ -342,6 +342,9 @@ if __name__ == '__main__':
 
     HOST, PORT = args.ip, args.port
 
+    # Start Celery worker
+    #subprocess.Popen(['celery', '-A', 'flowy_backend', 'worker'])
+
     with FlowyBackend((HOST, PORT), FlowyHandler) as server:
         server.socket_type = socket.AF_INET6
         print('Server running in', HOST, 'port', PORT)
